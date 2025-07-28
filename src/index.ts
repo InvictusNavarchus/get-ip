@@ -42,6 +42,98 @@ function isIPv6(ip: string): boolean {
 }
 
 /**
+ * Checks if an IPv4 address is private or localhost
+ * @param ip - IPv4 address string
+ * @returns true if the IP is private/localhost
+ */
+function isPrivateOrLocalIPv4(ip: string): boolean {
+  if (!isIPv4(ip)) return false;
+  
+  const parts = ip.split('.').map(Number);
+  
+  // Localhost (127.0.0.0/8)
+  if (parts[0] === 127) return true;
+  
+  // Private networks
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true;
+  
+  // 172.16.0.0/12
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  
+  // 192.168.0.0/16
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  
+  // Link-local (169.254.0.0/16)
+  if (parts[0] === 169 && parts[1] === 254) return true;
+  
+  return false;
+}
+
+/**
+ * Checks if an IPv6 address is private or localhost
+ * @param ip - IPv6 address string
+ * @returns true if the IP is private/localhost
+ */
+function isPrivateOrLocalIPv6(ip: string): boolean {
+  if (!isIPv6(ip)) return false;
+  
+  // Localhost
+  if (ip === '::1') return true;
+  
+  // Private/local addresses
+  if (ip.startsWith('fc') || ip.startsWith('fd')) return true; // Unique local addresses
+  if (ip.startsWith('fe80:')) return true; // Link-local addresses
+  if (ip.startsWith('::')) return true; // Various local addresses
+  
+  return false;
+}
+
+/**
+ * Determines if an IP should be prioritized over another
+ * @param newIP - New IP candidate
+ * @param currentIP - Current IP (if any)
+ * @returns true if newIP should replace currentIP
+ */
+function shouldPrioritizeIP(newIP: string, currentIP?: string): boolean {
+  if (!currentIP || currentIP === 'Unknown') return true;
+  
+  const newIsIPv4 = isIPv4(newIP);
+  const currentIsIPv4 = isIPv4(currentIP);
+  
+  // If we have IPv4 candidates, compare them
+  if (newIsIPv4 && currentIsIPv4) {
+    const newIsPrivate = isPrivateOrLocalIPv4(newIP);
+    const currentIsPrivate = isPrivateOrLocalIPv4(currentIP);
+    
+    // Prefer public over private
+    if (!newIsPrivate && currentIsPrivate) return true;
+    if (newIsPrivate && !currentIsPrivate) return false;
+    
+    // If both are the same type (public/private), keep the first one
+    return false;
+  }
+  
+  // If we have IPv6 candidates, compare them
+  if (!newIsIPv4 && !currentIsIPv4) {
+    const newIsPrivate = isPrivateOrLocalIPv6(newIP);
+    const currentIsPrivate = isPrivateOrLocalIPv6(currentIP);
+    
+    // Prefer public over private
+    if (!newIsPrivate && currentIsPrivate) return true;
+    if (newIsPrivate && !currentIsPrivate) return false;
+    
+    // If both are the same type, keep the first one
+    return false;
+  }
+  
+  // Prefer IPv4 over IPv6 if we don't have IPv4 yet
+  if (newIsIPv4 && !currentIsIPv4) return true;
+  
+  return false;
+}
+
+/**
  * Extracts and categorizes the client's IP addresses from the request object
  * @param req - Express request object
  * @returns Object containing IPv4, IPv6, primary IP, and version information
@@ -63,14 +155,24 @@ function getClientIP(req: Request): IPInfo {
     const cleanIP = ip.startsWith('::ffff:') ? ip.substring(7) : ip;
     
     if (isIPv4(cleanIP)) {
-      result.ipv4 = cleanIP;
-      if (!result.primary || result.primary === 'Unknown') {
+      // Only update IPv4 if we should prioritize this IP
+      if (!result.ipv4 || shouldPrioritizeIP(cleanIP, result.ipv4)) {
+        result.ipv4 = cleanIP;
+      }
+      
+      // Update primary IP if this should be prioritized
+      if (shouldPrioritizeIP(cleanIP, result.primary)) {
         result.primary = cleanIP;
         result.version = 'IPv4';
       }
     } else if (isIPv6(ip)) {
-      result.ipv6 = ip;
-      if (!result.primary || result.primary === 'Unknown') {
+      // Only update IPv6 if we should prioritize this IP
+      if (!result.ipv6 || shouldPrioritizeIP(ip, result.ipv6)) {
+        result.ipv6 = ip;
+      }
+      
+      // Update primary IP if this should be prioritized
+      if (shouldPrioritizeIP(ip, result.primary)) {
         result.primary = ip;
         result.version = 'IPv6';
       }
@@ -78,6 +180,7 @@ function getClientIP(req: Request): IPInfo {
   };
   
   // Handle X-Forwarded-For header (may contain multiple IPs)
+  // Process in order - first IP is usually the client's real IP
   if (forwarded) {
     const ips = forwarded.split(',').map(ip => ip.trim());
     ips.forEach(processIP);
@@ -88,7 +191,7 @@ function getClientIP(req: Request): IPInfo {
     processIP(realIP);
   }
   
-  // Fall back to connection remote address
+  // Fall back to connection remote address (lowest priority)
   if (remoteAddress) {
     processIP(remoteAddress);
   }
