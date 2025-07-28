@@ -1,7 +1,15 @@
 import express, { Request, Response, Express } from 'express';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const app: Express = express();
+
+// Configuration from environment variables
+const HOST: string = process.env.HOST || 'localhost';
 const PORT: number = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const NODE_ENV: string = process.env.NODE_ENV || 'development';
 
 /**
  * Extracts the client's IP address from the request object
@@ -34,7 +42,10 @@ app.get('/health', (req: Request, res: Response): void => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'get-ip-api'
+    service: 'get-ip-api',
+    environment: NODE_ENV,
+    host: HOST,
+    port: PORT
   });
 });
 
@@ -73,8 +84,9 @@ app.get('/ip/plain', (req: Request, res: Response): void => {
 /**
  * Start the server
  */
-app.listen(PORT, (): void => {
-  console.log(`🚀 Get IP API server is running on port ${PORT}`);
+app.listen(PORT, HOST, (): void => {
+  console.log(`🚀 Get IP API server is running on http://${HOST}:${PORT}`);
+  console.log(`🌍 Environment: ${NODE_ENV}`);
   console.log(`📍 Available endpoints:`);
   console.log(`   GET /        - Get IP as JSON`);
   console.log(`   GET /ip      - Get IP as JSON`);

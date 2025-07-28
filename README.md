@@ -18,6 +18,21 @@ A simple Express.js API built with TypeScript that allows anyone to get their pu
 pnpm install
 ```
 
+2. Copy the environment file and configure it:
+```bash
+cp .env.example .env
+```
+
+3. Edit the `.env` file to configure your settings:
+```bash
+# Server Configuration
+HOST=localhost
+PORT=3000
+
+# Application Environment
+NODE_ENV=development
+```
+
 ## Usage
 
 ### Development
@@ -39,7 +54,7 @@ pnpm build
 pnpm start
 ```
 
-The server runs on port 3000 by default. You can change this by setting the `PORT` environment variable.
+The server runs on `localhost:3000` by default. You can change the host and port by setting the `HOST` and `PORT` environment variables in your `.env` file.
 
 ## API Endpoints
 
@@ -77,13 +92,18 @@ GET /health
 {
   "status": "OK",
   "timestamp": "2025-07-28T10:30:00.000Z",
-  "service": "get-ip-api"
+  "service": "get-ip-api",
+  "environment": "development",
+  "host": "localhost",
+  "port": 3000
 }
 ```
 
 ## Environment Variables
 
+- `HOST` - Server host address (default: localhost)
 - `PORT` - Server port (default: 3000)
+- `NODE_ENV` - Application environment (default: development)
 
 ## Examples
 
